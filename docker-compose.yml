@@ -1,0 +1,96 @@
+version: '3'
+
+services:
+  # AMQP Message Broker
+  message_broker:
+    image: rabbitmq:3-management
+    container_name: poetl_message_broker
+    ports:
+      - 15672:15672
+      - 5672:5672
+      - 8080:5000
+    network_mode: "bridge"
+    environment:
+      RABBITMQ_ERLANT_COOKIE: gfbN7pPqMj.HgW3
+      RABBITMQ_DEFAULT_USER: poetl
+      RABBITMQ_DEFAULT_PASS: poetl
+
+  # API Entrypoint
+  http_entrypoint:
+    image: poetl:http-entrypoint
+    container_name: poetl_http_entrypoint
+    network_mode: "service:message_broker"
+    environment:
+      USER: poetl
+      PASS: poetl
+      HOST: localhost
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: 5000
+    build:
+      context: .
+      dockerfile: HttpEntrypoint.Dockerfile
+    depends_on:
+      - message_broker
+  
+  # RPC Services
+  exchange_topic_pool:
+    image: poetl:exchange_topic_pool
+    container_name: poetl_exchange_topic_pool
+    network_mode: "service:message_broker"
+    build:
+      context: .
+      dockerfile: RpcServices.Dockerfile
+    depends_on:
+      - message_broker
+    entrypoint: nameko run ExchangeTopicPool --broker amqp://poetl:poetl@localhost
+  rule_master:
+    image: poetl:rule_master
+    container_name: poetl_rule_master
+    network_mode: "service:message_broker"
+    build:
+      context: .
+      dockerfile: RpcServices.Dockerfile
+    depends_on:
+      - message_broker
+    command: nameko run RequestRuleMaster --broker amqp://poetl:poetl@localhost
+  request_engine:
+    image: poetl:request_engine
+    container_name: poetl_request_engine
+    network_mode: "service:message_broker"
+    build:
+      context: .
+      dockerfile: RpcServices.Dockerfile
+    environment:
+      USER: poetl
+      PASS: poetl
+      HOST: localhost
+      LEAGUE: heist
+    depends_on:
+      - message_broker
+      - exchange_topic_pool
+      - rule_master
+    command: nameko run RequestEngine --broker amqp://poetl:poetl@localhost
+  parser_engine:
+    image: poetl:parser_engine
+    container_name: poetl_parser_engine
+    network_mode: "service:message_broker"
+    build:
+      context: .
+      dockerfile: RpcServices.Dockerfile
+    depends_on:
+      - message_broker
+      - request_engine
+    command: nameko run ParserEngine --broker amqp://poetl:poetl@localhost
+  sink_engine:
+    image: poetl_sink_engine
+    container_name: poetl_sink_engine
+    network_mode: "service:message_broker"
+    volumes: 
+      - "./.docker/volume/sink_engine/output:${PWD}/output"
+    build:
+      context: .
+      dockerfile: RpcServices.Dockerfile
+    depends_on:
+      - message_broker
+      - parser_engine
+    command: nameko run SinkEngine --broker amqp://poetl:poetl@localhost
