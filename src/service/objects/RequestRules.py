@@ -46,13 +46,13 @@ class RuleManager():
         return self.pending_requests > 0
 
     def parse_handler_response(self, payload):
-        # A pending request has been completed
-        self.fulfill_request()
-        logging.info('Status code: %s' % payload['status_code'])
-        headers = payload['headers']
         try:
+            status_code = str(payload['status_code'])
+            headers = payload['headers']
             base_rules = headers['x-rate-limit-ip'][-1].split(',')
             current_state = headers['x-rate-limit-ip-state'][-1].split(',')
+
+            logging.info('Status code: %s' % status_code)
             for rule, state in zip(base_rules, current_state):
                 # 12:6:60 -  Maximum of 12 requests within 6 seconds.
                 # 60 seconds of timeout if threshold is exceeded.
@@ -68,12 +68,21 @@ class RuleManager():
                 current_state = int(state_info[0])
                 maximum_requests = int(rule_info[0])
                 duration = int(rule_info[1])
+
+                # Apply penalty if HTTP 429
+                if status_code == '429':
+                    logging.warning('Too many requests!')
+                    current_state = 0
+                    maximum_requests = 0
+                    duration = int(rule_info[2])
+
                 self.add_rule(RequestRule(duration, maximum_requests,
                                           current_state=current_state))
-
         except (IndexError, KeyError, AssertionError) as e:
             logging.error('Unable to parse rule.\n%s' % e)
             raise
+        finally:
+            self.fulfill_request()
 
 
 class RequestRule():
