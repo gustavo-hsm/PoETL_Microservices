@@ -29,8 +29,8 @@ class RuleManager():
         # Deny request if:
         # * Any of these rules return False
         # * There are no rules and at least 1 pending request
-        allowed = (False not in can_request) or\
-            (len(can_request) == 0 and self.pending_requests > 0)
+        allowed = (False not in can_request and len(can_request) > 0) or (
+            len(can_request) == 0 and self.pending_requests == 0)
         return allowed
 
     def increment_request_counter(self):
