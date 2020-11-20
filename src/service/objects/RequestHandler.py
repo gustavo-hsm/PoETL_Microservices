@@ -1,6 +1,5 @@
 import json
 import requests
-from time import time
 
 from nameko.standalone.events import event_dispatcher
 
@@ -56,7 +55,6 @@ class PostHandler(RequestFactory):
 class FetchHandler(RequestFactory):
     def __init__(self, service_url, service_config):
         super().__init__(service_url)
-        self.time = int(time())
         self.fetch_response = None
         self.service_config = service_config
 

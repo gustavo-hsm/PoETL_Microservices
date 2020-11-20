@@ -10,7 +10,6 @@ from nameko.rpc import rpc, RpcProxy
 from objects.ExchangeItem import ExchangeItem
 from objects.RequestHandler import PostHandler, FetchHandler
 from objects.Queue import Queue
-from objects.RequestRules import RuleManager
 
 
 class RequestEngine():
@@ -52,14 +51,7 @@ class RequestEngine():
         if self.request_queue.get_queue_size() > 0:
             # Prioritizing PostHandlers first
             requests = self.request_queue.retrieve_by_type(PostHandler)
-            while len(requests) > 0:
-                if self.rule_master.authorize():
-                    self.rule_master.promise_request.call_async()
-                    next_up = requests.pop()
-                    th.Thread(target=next_up.execute).start()
-                else:
-                    logging.info('Unauthorized. Waiting...')
-                    sleep(1)
+            self._execute_handler(requests)
 
             # Waiting for pending requests to complete
             while self.rule_master.has_pending_requests():
@@ -68,14 +60,7 @@ class RequestEngine():
 
             # Running remaining requests next
             remaining = self.request_queue.retrieve_all()
-            while len(remaining) > 0:
-                if self.rule_master.authorize():
-                    self.rule_master.promise_request.call_async()
-                    next_up = remaining.pop()
-                    th.Thread(target=next_up.execute).start()
-                else:
-                    logging.info('Unauthorized. Waiting...')
-                    sleep(1)
+            self._execute_handler(remaining)
             return 200, 'Start cycle completed'
         else:
             return 404, 'Queue is empty'
@@ -107,3 +92,13 @@ class RequestEngine():
     def fetch_handler_response(self, payload):
         # Send this payload to RuleManager
         self.rule_master.parse_handler_response.call_async(payload)
+
+    def _execute_handler(self, requests):
+        while len(requests) > 0:
+            if self.rule_master.authorize():
+                self.rule_master.promise_request.call_async()
+                next_up = requests.pop()
+                th.Thread(target=next_up.execute).start()
+            else:
+                logging.info('Unauthorized. Waiting...')
+                sleep(1)

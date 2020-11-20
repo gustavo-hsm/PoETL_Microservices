@@ -1,5 +1,3 @@
-
-
 from nameko.rpc import rpc
 from nameko.events import event_handler, EventDispatcher
 

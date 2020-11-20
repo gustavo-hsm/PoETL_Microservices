@@ -6,6 +6,7 @@ services:
     image: rabbitmq:3-management
     container_name: poetl_message_broker
     ports:
+      - 15671:15671
       - 15672:15672
       - 5672:5672
       - 8080:5000
@@ -17,7 +18,7 @@ services:
 
   # API Entrypoint
   http_entrypoint:
-    image: poetl:http-entrypoint
+    image: poetl:http_entrypoint
     container_name: poetl_http_entrypoint
     network_mode: "service:message_broker"
     environment:
@@ -43,6 +44,7 @@ services:
     depends_on:
       - message_broker
     entrypoint: nameko run ExchangeTopicPool --broker amqp://poetl:poetl@localhost
+
   rule_master:
     image: poetl:rule_master
     container_name: poetl_rule_master
@@ -52,7 +54,8 @@ services:
       dockerfile: RpcServices.Dockerfile
     depends_on:
       - message_broker
-    command: nameko run RequestRuleMaster --broker amqp://poetl:poetl@localhost
+    command: nameko run RuleMaster --broker amqp://poetl:poetl@localhost
+
   request_engine:
     image: poetl:request_engine
     container_name: poetl_request_engine
@@ -70,6 +73,7 @@ services:
       - exchange_topic_pool
       - rule_master
     command: nameko run RequestEngine --broker amqp://poetl:poetl@localhost
+
   parser_engine:
     image: poetl:parser_engine
     container_name: poetl_parser_engine
@@ -81,6 +85,7 @@ services:
       - message_broker
       - request_engine
     command: nameko run ParserEngine --broker amqp://poetl:poetl@localhost
+
   sink_engine:
     image: poetl_sink_engine
     container_name: poetl_sink_engine
